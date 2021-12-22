@@ -1,17 +1,16 @@
 package com.pichillilorenzo.flutter_appavailability;
 
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -20,22 +19,12 @@ import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.annotation.TargetApi;
 
+import androidx.annotation.NonNull;
+
 /** AppAvailability */
-public class AppAvailability implements MethodCallHandler {
+public class AppAvailability implements FlutterPlugin, MethodCallHandler {
 
-  private final Activity activity;
-  private final Registrar registrar;
-
-  public AppAvailability(Registrar registrar, Activity activity) {
-    this.registrar = registrar;
-    this.activity = activity;
-  }
-
-  /** Plugin registration. */
-  public static void registerWith(Registrar registrar) {
-    final MethodChannel channel = new MethodChannel(registrar.messenger(), "com.pichillilorenzo/flutter_appavailability");
-    channel.setMethodCallHandler(new AppAvailability(registrar, registrar.activity()));
-  }
+  private FlutterPluginBinding binding = null;
 
   @Override
   public void onMethodCall(MethodCall call, Result result) {
@@ -72,7 +61,7 @@ public class AppAvailability implements MethodCallHandler {
   }
 
   private List<Map<String, Object>> getInstalledApps() {
-    PackageManager packageManager = registrar.context().getPackageManager();
+    PackageManager packageManager = binding.getApplicationContext().getPackageManager();
     List<PackageInfo> apps = packageManager.getInstalledPackages(0);
     List<Map<String, Object>> installedApps = new ArrayList<>(apps.size());
     int systemAppMask = ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP;
@@ -90,7 +79,7 @@ public class AppAvailability implements MethodCallHandler {
   }
 
   private PackageInfo getAppPackageInfo(String uri) {
-    Context ctx = activity.getApplicationContext();
+    Context ctx = binding.getApplicationContext();
     final PackageManager pm = ctx.getPackageManager();
 
     try {
@@ -105,7 +94,7 @@ public class AppAvailability implements MethodCallHandler {
 
   private Map<String, Object> convertPackageInfoToJson(PackageInfo info) {
     Map<String, Object> map = new HashMap<>();
-    map.put("app_name", info.applicationInfo.loadLabel(registrar.context().getPackageManager()).toString());
+    map.put("app_name", info.applicationInfo.loadLabel(binding.getApplicationContext().getPackageManager()).toString());
     map.put("package_name", info.packageName);
     map.put("version_code", String.valueOf(info.versionCode));
     map.put("version_name", info.versionName);
@@ -115,7 +104,7 @@ public class AppAvailability implements MethodCallHandler {
   private void isAppEnabled(String packageName, Result result) {
     boolean appStatus = false;
     try {
-      ApplicationInfo ai = registrar.context().getPackageManager().getApplicationInfo(packageName, 0);
+      ApplicationInfo ai = binding.getApplicationContext().getPackageManager().getApplicationInfo(packageName, 0);
       if (ai != null) {
         appStatus = ai.enabled;
       }
@@ -131,15 +120,27 @@ public class AppAvailability implements MethodCallHandler {
     PackageInfo info = getAppPackageInfo(packageName);
 
     if(info != null) {
-      Intent launchIntent = registrar.context().getPackageManager().getLaunchIntentForPackage(packageName);
+      Intent launchIntent = binding.getApplicationContext().getPackageManager().getLaunchIntentForPackage(packageName);
       if (launchIntent != null) {
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        registrar.context().startActivity(launchIntent);
+        binding.getApplicationContext().startActivity(launchIntent);
         result.success(null);
         return;
       }
     }
 
     result.error("", "App not found " + packageName, null);
+  }
+
+  @Override
+  public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+    this.binding = binding;
+    final MethodChannel channel = new MethodChannel(binding.getBinaryMessenger(),"com.pichillilorenzo/flutter_appavailability");
+    channel.setMethodCallHandler(this);
+  }
+
+  @Override
+  public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+
   }
 }
